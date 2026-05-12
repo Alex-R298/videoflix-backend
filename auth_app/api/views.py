@@ -4,8 +4,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import RegisterSerializer
-from .utils import send_activation_email
+from .serializers import LoginSerializer, RegisterSerializer
+from .utils import generate_tokens_for_user, send_activation_email, set_jwt_cookies
 
 
 class RegisterView(APIView):
@@ -23,3 +23,21 @@ class RegisterView(APIView):
             {'user': serializer.data, 'token': token},
             status=status.HTTP_201_CREATED,
         )
+
+
+class LoginView(APIView):
+    """POST /api/login/ — authenticate the user and set HttpOnly JWT cookies."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        access, refresh = generate_tokens_for_user(user)
+        response = Response({
+            'detail': 'Login successful',
+            'user': {'id': user.id, 'username': user.username},
+        }, status=status.HTTP_200_OK)
+        set_jwt_cookies(response, access, refresh)
+        return response

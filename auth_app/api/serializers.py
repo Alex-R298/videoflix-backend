@@ -1,10 +1,24 @@
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from rest_framework import serializers
 
 
 User = get_user_model()
 
 GENERIC_INPUT_ERROR = 'Please check your input and try again.'
+
+
+class LoginSerializer(serializers.Serializer):
+    """Validate credentials and resolve the matching active user."""
+
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        user = authenticate(username=attrs['email'], password=attrs['password'])
+        if user is None or not user.is_active:
+            raise serializers.ValidationError(GENERIC_INPUT_ERROR)
+        attrs['user'] = user
+        return attrs
 
 
 class RegisterSerializer(serializers.ModelSerializer):
