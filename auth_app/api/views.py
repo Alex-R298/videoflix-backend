@@ -10,6 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import (
     LoginSerializer,
+    PasswordConfirmSerializer,
     PasswordResetRequestSerializer,
     RegisterSerializer,
 )
@@ -136,5 +137,25 @@ class PasswordResetRequestView(APIView):
             send_password_reset_email(user, request)
         return Response(
             {'detail': 'An email has been sent to reset your password.'},
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordConfirmView(APIView):
+    """POST /api/password_confirm/<uidb64>/<token>/ — set a new password."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, uidb64, token):
+        user = get_user_from_uidb64(uidb64)
+        if user is None or not default_token_generator.check_token(user, token):
+            return Response({'detail': 'Invalid reset link.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer = PasswordConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
+        return Response(
+            {'detail': 'Your Password has been successfully reset.'},
             status=status.HTTP_200_OK,
         )

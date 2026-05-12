@@ -27,6 +27,18 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class PasswordConfirmSerializer(serializers.Serializer):
+    """Validate the new password fields for the reset-confirm endpoint."""
+
+    new_password = serializers.CharField(write_only=True, required=True)
+    confirm_password = serializers.CharField(write_only=True, required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': GENERIC_INPUT_ERROR})
+        return attrs
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     """Validate registration input and create an inactive user."""
 
