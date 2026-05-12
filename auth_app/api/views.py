@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -7,12 +8,17 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import LoginSerializer, RegisterSerializer
+from .serializers import (
+    LoginSerializer,
+    PasswordResetRequestSerializer,
+    RegisterSerializer,
+)
 from .utils import (
     delete_jwt_cookies,
     generate_tokens_for_user,
     get_user_from_uidb64,
     send_activation_email,
+    send_password_reset_email,
     set_access_cookie,
     set_jwt_cookies,
 )
@@ -115,3 +121,20 @@ class TokenRefreshView(APIView):
                             status=status.HTTP_200_OK)
         set_access_cookie(response, access)
         return response
+
+
+class PasswordResetRequestView(APIView):
+    """POST /api/password_reset/ — send a reset link if the email is registered."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = get_user_model().objects.filter(email=serializer.validated_data['email']).first()
+        if user is not None:
+            send_password_reset_email(user, request)
+        return Response(
+            {'detail': 'An email has been sent to reset your password.'},
+            status=status.HTTP_200_OK,
+        )

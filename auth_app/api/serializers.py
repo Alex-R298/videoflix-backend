@@ -21,6 +21,12 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Validate the password-reset request input (email field only)."""
+
+    email = serializers.EmailField()
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     """Validate registration input and create an inactive user."""
 

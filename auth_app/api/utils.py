@@ -60,6 +60,24 @@ def send_activation_email(user, request):
     )
 
 
+def build_password_reset_link(user, request):
+    """Build the password-reset URL with uidb64 and a one-time token."""
+    uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    return f'{request.scheme}://{request.get_host()}/api/password_confirm/{uidb64}/{token}/'
+
+
+def send_password_reset_email(user, request):
+    """Send the password-reset email to the given user."""
+    link = build_password_reset_link(user, request)
+    send_mail(
+        subject='Reset your Videoflix password',
+        message=f'Hi,\n\nuse this link to set a new password:\n{link}',
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+    )
+
+
 def get_user_from_uidb64(uidb64):
     """Decode uidb64 and return the matching user, or None if not found."""
     try:
