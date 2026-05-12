@@ -24,3 +24,10 @@ Thumbs.db
 
 # Static files (collected)
 staticfiles/
+static/
+
+# User-uploaded media
+media/
+
+# Logs
+*.log
