@@ -11,6 +11,7 @@ from .serializers import LoginSerializer, RegisterSerializer
 from .utils import (
     delete_jwt_cookies,
     generate_tokens_for_user,
+    get_user_from_uidb64,
     send_activation_email,
     set_jwt_cookies,
 )
@@ -75,3 +76,19 @@ class LogoutView(APIView):
         response = Response({'detail': LOGOUT_OK_MESSAGE}, status=status.HTTP_200_OK)
         delete_jwt_cookies(response)
         return response
+
+
+class ActivateAccountView(APIView):
+    """GET /api/activate/<uidb64>/<token>/ — activate a registered user."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, uidb64, token):
+        user = get_user_from_uidb64(uidb64)
+        if user is None or not default_token_generator.check_token(user, token):
+            return Response({'detail': 'Activation failed.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+        return Response({'message': 'Account successfully activated.'},
+                        status=status.HTTP_200_OK)
