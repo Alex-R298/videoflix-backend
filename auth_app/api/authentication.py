@@ -3,7 +3,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
 class CookieJWTAuthentication(JWTAuthentication):
-    """JWT-Authentication, die das Access-Token aus einem HttpOnly-Cookie liest."""
+    """JWT authentication that reads the access token from an HttpOnly cookie."""
 
     def authenticate(self, request):
         raw_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE'])
