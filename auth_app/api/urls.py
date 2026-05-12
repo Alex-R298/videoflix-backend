@@ -1,6 +1,12 @@
 from django.urls import path
 
-from .views import ActivateAccountView, LoginView, LogoutView, RegisterView
+from .views import (
+    ActivateAccountView,
+    LoginView,
+    LogoutView,
+    RegisterView,
+    TokenRefreshView,
+)
 
 
 urlpatterns = [
@@ -8,4 +14,5 @@ urlpatterns = [
     path('activate/<str:uidb64>/<str:token>/', ActivateAccountView.as_view(), name='activate'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
 ]

@@ -13,6 +13,7 @@ from .utils import (
     generate_tokens_for_user,
     get_user_from_uidb64,
     send_activation_email,
+    set_access_cookie,
     set_jwt_cookies,
 )
 
@@ -92,3 +93,25 @@ class ActivateAccountView(APIView):
         user.save(update_fields=['is_active'])
         return Response({'message': 'Account successfully activated.'},
                         status=status.HTTP_200_OK)
+
+
+class TokenRefreshView(APIView):
+    """POST /api/token/refresh/ — issue a new access token from the refresh cookie."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        raw = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
+        if not raw:
+            return Response({'detail': 'Refresh token missing.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            refresh = RefreshToken(raw)
+        except TokenError:
+            return Response({'detail': 'Refresh token invalid.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+        access = str(refresh.access_token)
+        response = Response({'detail': 'Token refreshed', 'access': access},
+                            status=status.HTTP_200_OK)
+        set_access_cookie(response, access)
+        return response

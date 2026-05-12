@@ -13,19 +13,26 @@ def generate_tokens_for_user(user):
     return str(refresh.access_token), str(refresh)
 
 
-def set_jwt_cookies(response, access_token, refresh_token):
-    """Attach access_token and refresh_token as HttpOnly cookies to the response."""
+def _set_jwt_cookie(response, key, value):
+    """Set one JWT cookie using the configured HttpOnly options."""
     cfg = settings.SIMPLE_JWT
     response.set_cookie(
-        key=cfg['AUTH_COOKIE'], value=access_token,
+        key=key, value=value,
         httponly=cfg['AUTH_COOKIE_HTTP_ONLY'], secure=cfg['AUTH_COOKIE_SECURE'],
         samesite=cfg['AUTH_COOKIE_SAMESITE'], path=cfg['AUTH_COOKIE_PATH'],
     )
-    response.set_cookie(
-        key=cfg['AUTH_COOKIE_REFRESH'], value=refresh_token,
-        httponly=cfg['AUTH_COOKIE_HTTP_ONLY'], secure=cfg['AUTH_COOKIE_SECURE'],
-        samesite=cfg['AUTH_COOKIE_SAMESITE'], path=cfg['AUTH_COOKIE_PATH'],
-    )
+
+
+def set_jwt_cookies(response, access_token, refresh_token):
+    """Attach both access_token and refresh_token as HttpOnly cookies."""
+    cfg = settings.SIMPLE_JWT
+    _set_jwt_cookie(response, cfg['AUTH_COOKIE'], access_token)
+    _set_jwt_cookie(response, cfg['AUTH_COOKIE_REFRESH'], refresh_token)
+
+
+def set_access_cookie(response, access_token):
+    """Set only the access_token cookie (used by /api/token/refresh/)."""
+    _set_jwt_cookie(response, settings.SIMPLE_JWT['AUTH_COOKIE'], access_token)
 
 
 def delete_jwt_cookies(response):
