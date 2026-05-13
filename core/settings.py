@@ -205,7 +205,7 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 # Frontend URLs used for outgoing email links
 FRONTEND_URL = os.environ.get('FRONTEND_URL', default='http://127.0.0.1:5500')
 FRONTEND_ACTIVATION_PATH = os.environ.get(
-    'FRONTEND_ACTIVATION_PATH', default='/pages/auth/activation_page.html',
+    'FRONTEND_ACTIVATION_PATH', default='/pages/auth/activate.html',
 )
 FRONTEND_PASSWORD_RESET_PATH = os.environ.get(
     'FRONTEND_PASSWORD_RESET_PATH', default='/pages/auth/confirm_password.html',

@@ -2,6 +2,8 @@ from django.db import models
 
 
 class Video(models.Model):
+    """A user-uploaded video plus its derived HLS streams and thumbnail."""
+
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=100, blank=True)
@@ -13,4 +15,5 @@ class Video(models.Model):
         ordering = ('-created_at',)
 
     def __str__(self):
+        """Return the video's title for admin and shell representations."""
         return self.title

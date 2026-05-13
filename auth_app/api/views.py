@@ -34,11 +34,19 @@ LOGOUT_OK_MESSAGE = (
 
 
 class RegisterView(APIView):
-    """POST /api/register/ — create an inactive user and send the activation mail."""
+    """``POST /api/register/`` — create an inactive user and mail the link."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Validate input, create the user and trigger the activation mail.
+
+        Args:
+            request: DRF request with ``email``, ``password``, ``confirmed_password``.
+
+        Returns:
+            HTTP 201 with ``{user, token}``; the token is informational only.
+        """
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -52,11 +60,20 @@ class RegisterView(APIView):
 
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class LoginView(APIView):
-    """POST /api/login/ — authenticate the user and set HttpOnly JWT cookies."""
+    """``POST /api/login/`` — authenticate and set HttpOnly JWT cookies."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Authenticate the credentials and respond with JWT cookies.
+
+        Args:
+            request: DRF request with ``email`` and ``password``.
+
+        Returns:
+            HTTP 200 with ``{detail, user}`` and ``access_token`` /
+            ``refresh_token`` cookies attached.
+        """
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
@@ -70,11 +87,19 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    """POST /api/logout/ — blacklist the refresh token and clear JWT cookies."""
+    """``POST /api/logout/`` — blacklist the refresh token and clear cookies."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Blacklist the user's refresh token and remove the JWT cookies.
+
+        Args:
+            request: DRF request; must carry the ``refresh_token`` cookie.
+
+        Returns:
+            HTTP 200 on success, HTTP 400 if the cookie is missing or invalid.
+        """
         raw = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
         if not raw:
             return Response({'detail': 'Refresh token missing.'},
@@ -90,11 +115,21 @@ class LogoutView(APIView):
 
 
 class ActivateAccountView(APIView):
-    """GET /api/activate/<uidb64>/<token>/ — activate a registered user."""
+    """``GET /api/activate/<uidb64>/<token>/`` — activate a registered user."""
 
     permission_classes = [AllowAny]
 
     def get(self, request, uidb64, token):
+        """Validate the activation link and flip ``is_active`` to True.
+
+        Args:
+            request: DRF request.
+            uidb64: Base64-encoded user PK from the email link.
+            token: One-time activation token from the email link.
+
+        Returns:
+            HTTP 200 with a success message, or HTTP 400 when the link is invalid.
+        """
         user = get_user_from_uidb64(uidb64)
         if user is None or not default_token_generator.check_token(user, token):
             return Response({'detail': 'Activation failed.'},
@@ -106,11 +141,20 @@ class ActivateAccountView(APIView):
 
 
 class TokenRefreshView(APIView):
-    """POST /api/token/refresh/ — issue a new access token from the refresh cookie."""
+    """``POST /api/token/refresh/`` — issue a new access token from the cookie."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Validate the refresh cookie and return a fresh access token.
+
+        Args:
+            request: DRF request; must carry the ``refresh_token`` cookie.
+
+        Returns:
+            HTTP 200 with ``{detail, access}`` and an updated access cookie,
+            HTTP 400 when the cookie is missing, HTTP 401 when invalid.
+        """
         raw = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE_REFRESH'])
         if not raw:
             return Response({'detail': 'Refresh token missing.'},
@@ -128,11 +172,20 @@ class TokenRefreshView(APIView):
 
 
 class PasswordResetRequestView(APIView):
-    """POST /api/password_reset/ — send a reset link if the email is registered."""
+    """``POST /api/password_reset/`` — mail a reset link if the address exists."""
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Send a password-reset mail without leaking whether the email exists.
+
+        Args:
+            request: DRF request with the ``email`` field.
+
+        Returns:
+            HTTP 200 with the same response in both cases; the mail is only
+            actually dispatched when a user with that address exists.
+        """
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = get_user_model().objects.filter(email=serializer.validated_data['email']).first()
@@ -145,11 +198,21 @@ class PasswordResetRequestView(APIView):
 
 
 class PasswordConfirmView(APIView):
-    """POST /api/password_confirm/<uidb64>/<token>/ — set a new password."""
+    """``POST /api/password_confirm/<uidb64>/<token>/`` — set the new password."""
 
     permission_classes = [AllowAny]
 
     def post(self, request, uidb64, token):
+        """Validate the reset link and persist the new password.
+
+        Args:
+            request: DRF request with ``new_password`` and ``confirm_password``.
+            uidb64: Base64-encoded user PK from the email link.
+            token: One-time reset token from the email link.
+
+        Returns:
+            HTTP 200 on success, HTTP 400 on an invalid link or input.
+        """
         user = get_user_from_uidb64(uidb64)
         if user is None or not default_token_generator.check_token(user, token):
             return Response({'detail': 'Invalid reset link.'},
