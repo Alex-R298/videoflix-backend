@@ -67,9 +67,10 @@ pip install -r requirements.txt
 git clone <repo-url>
 cd videoflix-backend
 
-# 2. Copy and configure the .env file (see template below)
-cp .env.example .env
-#    edit .env with your own SECRET_KEY, DB credentials, allowed origins
+# 2. Copy the env template and adjust it
+cp .env.template .env
+#    edit .env with your own SECRET_KEY, DB credentials, and (optional)
+#    SMTP credentials if you want real mail delivery
 
 # 3. Build and start everything (DB, Redis, web + RQ worker via entrypoint)
 docker compose up --build -d
@@ -93,7 +94,49 @@ The backend is now reachable at **http://localhost:8000/**.
 
 ## Environment Variables (`.env`)
 
-The `web` container is wired to a local `.env` file via `env_file: .env` in `docker-compose.yml`. A starter `.env` ships with the project — adjust `SECRET_KEY`, DB credentials, and `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS` to match your frontend host before running the stack. All variable names are referenced in `core/settings.py` if you need to look them up.
+The `web` container is wired to a local `.env` file via `env_file: .env` in `docker-compose.yml`. `.env.template` ships with the project — copy it to `.env` and adjust as needed. The most important variables:
+
+| Variable | Default | When to change |
+|---|---|---|
+| `SECRET_KEY` | dev key | Always set a real one |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | placeholders | Always set |
+| `CSRF_TRUSTED_ORIGINS` | `http://localhost:5500` | Add your frontend dev host |
+| `CORS_ALLOWED_ORIGINS` | falls back to common ports (5500/5501/4200) | Override if your frontend runs elsewhere |
+| `FRONTEND_URL` | `http://127.0.0.1:5500` | Set to your actual frontend origin |
+| `FRONTEND_ACTIVATION_PATH` | `/pages/auth/activate.html` | Path of the activation page in the frontend |
+| `FRONTEND_PASSWORD_RESET_PATH` | `/pages/auth/confirm_password.html` | Path of the password-confirm page |
+| `EMAIL_BACKEND` | `...console.EmailBackend` | Set to `...smtp.EmailBackend` for real mails |
+| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | empty | Fill in to send via SMTP (Mailtrap/Gmail/...) |
+
+All variable names are referenced in `core/settings.py`.
+
+---
+
+## Email Setup
+
+The backend renders **HTML + plaintext** activation and password-reset emails from templates in [`auth_app/templates/emails/`](auth_app/templates/emails/). The link inside the email points to the **frontend** (e.g. `http://127.0.0.1:5500/pages/auth/activate.html?uid=...&token=...`); the frontend then calls the backend API.
+
+Three ways to deliver these mails:
+
+| Backend | What happens | Use for |
+|---|---|---|
+| `console.EmailBackend` (default) | Mail is dumped into the Docker logs | Quick dev / submission default — no setup |
+| `smtp.EmailBackend` with [Mailtrap](https://mailtrap.io) | Mail lands in a sandbox web inbox | Visual testing of templates |
+| `smtp.EmailBackend` with Gmail / SendGrid / Mailgun | Real delivery to a real inbox | Production-style demo |
+
+To switch from console to real SMTP, set in `.env`:
+
+```env
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=sandbox.smtp.mailtrap.io     # or smtp.gmail.com, etc.
+EMAIL_PORT=2525                          # or 587
+EMAIL_HOST_USER=your_user
+EMAIL_HOST_PASSWORD=your_password
+EMAIL_USE_TLS=True
+DEFAULT_FROM_EMAIL=noreply@videoflix.local
+```
+
+Then `docker compose up -d` to recreate the container with the new env.
 
 ---
 
@@ -171,15 +214,18 @@ docker compose logs -f web
 
 ## End-to-End Smoke Test (via Frontend)
 
-1. **Register** a user via the frontend (or `curl -X POST /api/register/`).
-2. **Find the activation link** in the container logs:
+Assumes the frontend is running on `http://127.0.0.1:5500` (or 5501 — adjust `FRONTEND_URL` in `.env`).
+
+1. **Register** a user via the frontend form.
+2. **Pick up the activation link.** With the default console backend, the mail is in the Docker log:
    ```bash
    docker compose logs web | grep -A1 'activate your account'
    ```
-3. **Open the link** in the browser — account gets `is_active=True`.
-4. **Log in** via the frontend — receive HttpOnly cookies + CSRF cookie.
-5. **Upload a video** in the Django admin — wait until the RQ worker has finished (visible in logs).
-6. **Open the dashboard** in the frontend — thumbnails load, HLS playback starts.
+   Note: the URL in the raw log is quoted-printable-encoded (`=3D` → `=`, `&amp;` → `&`). For clickable mails, configure SMTP/Mailtrap (see *Email Setup*).
+3. **Open the link** → the frontend's activation page runs, calls `GET /api/activate/<uid>/<token>/`, account becomes `is_active=True`.
+4. **Log in** via the frontend — backend sets HttpOnly JWT cookies and a `csrftoken` cookie.
+5. **Upload a video** in the Django admin (`/admin/video_app/video/add/`). The RQ worker picks up `process_video` automatically (`docker compose logs -f web` shows ffmpeg output).
+6. **Open the dashboard** in the frontend — thumbnails appear once the worker finished, HLS playback works through the manifest/segment endpoints.
 
 ---
 
@@ -210,11 +256,13 @@ docker compose down -v
 videoflix-backend/
 ├── auth_app/                 # User registration, login, JWT cookie handling
 │   ├── api/
-│   │   ├── authentication.py  # CookieJWTAuthentication
+│   │   ├── authentication.py  # CookieJWTAuthentication (reads JWT from cookie)
 │   │   ├── serializers.py
 │   │   ├── urls.py
 │   │   ├── utils.py           # Token, cookie, mail helpers
 │   │   └── views.py
+│   ├── templates/emails/      # HTML + plaintext activation / reset templates
+│   ├── admin.py               # Custom UserAdmin (surfaces is_active)
 │   └── ...
 ├── video_app/                # Video model, HLS pipeline, streaming endpoints
 │   ├── api/
@@ -255,3 +303,5 @@ videoflix-backend/
 | CORS blocked in browser | Add the frontend origin to `CORS_ALLOWED_ORIGINS` in `.env`, then `docker compose up -d` |
 | `404` on `index.m3u8` for an existing video | HLS conversion has not run yet — check the RQ worker logs |
 | `Logout error, redirecting...` toast | Missing `csrftoken` cookie — log in first to receive it |
+| Email link in Docker log has `=3D` / `&amp;` artifacts | That's quoted-printable encoding of the multipart MIME message. Decoded URL is the same. Switch to Mailtrap or Gmail SMTP to see clean clickable links |
+| 500 on `/api/register/` after changing `.env` | `EMAIL_BACKEND` is set to `smtp` but credentials are wrong — fix the SMTP values or remove the line to fall back to console backend |
