@@ -188,12 +188,43 @@ SIMPLE_JWT = {
 }
 
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@videoflix.local'
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', default='localhost')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', default=587))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', default='True') == 'True'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', default='False') == 'True'
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', default='noreply@videoflix.local',
+)
 
 
-# CORS
+# Frontend URLs used for outgoing email links
+FRONTEND_URL = os.environ.get('FRONTEND_URL', default='http://127.0.0.1:5500')
+FRONTEND_ACTIVATION_PATH = os.environ.get(
+    'FRONTEND_ACTIVATION_PATH', default='/pages/auth/activation_page.html',
+)
+FRONTEND_PASSWORD_RESET_PATH = os.environ.get(
+    'FRONTEND_PASSWORD_RESET_PATH', default='/pages/auth/confirm_password.html',
+)
+
+
+# CORS — defaults cover the common DevAkademie frontend dev ports
+DEFAULT_FRONTEND_ORIGINS = (
+    'http://localhost:5500,http://127.0.0.1:5500,'
+    'http://localhost:5501,http://127.0.0.1:5501,'
+    'http://localhost:4200,http://127.0.0.1:4200'
+)
 CORS_ALLOWED_ORIGINS = os.environ.get(
-    'CORS_ALLOWED_ORIGINS', default='http://localhost:4200',
+    'CORS_ALLOWED_ORIGINS', default=DEFAULT_FRONTEND_ORIGINS,
 ).split(',')
 CORS_ALLOW_CREDENTIALS = True
+
+# Also extend CSRF_TRUSTED_ORIGINS with the same defaults if the env file
+# provides only a subset (e.g. only port 5500). Keeps CORS and CSRF in sync.
+for origin in DEFAULT_FRONTEND_ORIGINS.split(','):
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)

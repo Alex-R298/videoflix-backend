@@ -1,7 +1,8 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -42,39 +43,68 @@ def delete_jwt_cookies(response):
     response.delete_cookie(cfg['AUTH_COOKIE_REFRESH'], path=cfg['AUTH_COOKIE_PATH'])
 
 
-def build_activation_link(user, request):
-    """Build the activation URL containing uidb64 and a one-time token."""
+def _make_uid_and_token(user):
+    """Return (uidb64, token) for a one-time email link."""
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
-    return f'{request.scheme}://{request.get_host()}/api/activate/{uidb64}/{token}/'
+    return uidb64, token
 
 
-def send_activation_email(user, request):
-    """Send the account activation email to the given user."""
-    link = build_activation_link(user, request)
-    send_mail(
-        subject='Confirm your Videoflix registration',
-        message=f'Hi,\n\nplease activate your account using this link:\n{link}',
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+def build_activation_link(user):
+    """Build the frontend activation URL with uid and token as query params."""
+    uidb64, token = _make_uid_and_token(user)
+    return (
+        f'{settings.FRONTEND_URL}{settings.FRONTEND_ACTIVATION_PATH}'
+        f'?uid={uidb64}&token={token}'
     )
 
 
-def build_password_reset_link(user, request):
-    """Build the password-reset URL with uidb64 and a one-time token."""
-    uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
-    return f'{request.scheme}://{request.get_host()}/api/password_confirm/{uidb64}/{token}/'
+def build_password_reset_link(user):
+    """Build the frontend password-reset URL with uid and token as query params."""
+    uidb64, token = _make_uid_and_token(user)
+    return (
+        f'{settings.FRONTEND_URL}{settings.FRONTEND_PASSWORD_RESET_PATH}'
+        f'?uid={uidb64}&token={token}'
+    )
 
 
-def send_password_reset_email(user, request):
-    """Send the password-reset email to the given user."""
-    link = build_password_reset_link(user, request)
-    send_mail(
-        subject='Reset your Videoflix password',
-        message=f'Hi,\n\nuse this link to set a new password:\n{link}',
+def _send_html_email(subject, template_base, context, recipient):
+    """Render a plain + HTML email pair from templates and send it."""
+    text_body = render_to_string(f'emails/{template_base}.txt', context)
+    html_body = render_to_string(f'emails/{template_base}.html', context)
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
+        to=[recipient],
+    )
+    message.attach_alternative(html_body, 'text/html')
+    message.send()
+
+
+def send_activation_email(user, request=None):
+    """Send the account activation email (HTML + plain) to the given user."""
+    link = build_activation_link(user)
+    _send_html_email(
+        subject='Confirm your email',
+        template_base='activation',
+        context={
+            'activation_link': link,
+            'frontend_url': settings.FRONTEND_URL,
+            'user': user,
+        },
+        recipient=user.email,
+    )
+
+
+def send_password_reset_email(user, request=None):
+    """Send the password-reset email (HTML + plain) to the given user."""
+    link = build_password_reset_link(user)
+    _send_html_email(
+        subject='Reset your Password',
+        template_base='password_reset',
+        context={'reset_link': link, 'user': user},
+        recipient=user.email,
     )
 
 
